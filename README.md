@@ -1,45 +1,80 @@
-# 禁用 Chrome 自动更新脚本
+# Disable Chrome Auto-Update Script
 
-本仓库提供 `disablechrome.ps1`，用于在 Windows 上关闭 Google Chrome 自动更新相关设置。脚本会修改计算机级注册表策略、停用找到的 Google 更新服务和计划任务，并对存在的 Google Update 目录添加拒绝写入权限。**这些修改会影响整台电脑，不只是当前用户。**
+A Windows PowerShell script for disabling Google Chrome's automatic update mechanisms. It changes Google Update policy keys, disables matching update services and scheduled tasks when present, and adds write-deny permissions to existing Google Update directories.
 
-> **重要提示：** 禁用更新可能导致 Chrome 长期无法获得安全修复。建议仅在确有需要时使用，并定期手动检查和安装 Chrome 更新。运行前请确认你有权管理这台电脑，并了解如何恢复所做更改。
+> **This is a maintenance and compatibility workaround, not a security recommendation.** Chrome updates include security fixes. Keeping an outdated browser online can expose you to known vulnerabilities. Use this only for a specific, temporary reason, and plan how you will install updates manually or re-enable updating.
 
-## 使用步骤
+## Why disable Chrome updates?
 
-1. 从本仓库下载 `disablechrome.ps1`，或克隆仓库。将文件保存到一个你能找到的位置，例如桌面上的脚本文件夹。
-2. 在开始菜单中搜索 **Windows PowerShell**，右键选择 **以管理员身份运行**。脚本需要管理员权限才能修改 `HKLM` 注册表项、系统服务、计划任务和 Program Files 下的权限。
-3. 仅对当前 PowerShell 进程临时放宽脚本执行策略：
+Chrome updates are normally important: they deliver security patches, bug fixes, and compatibility improvements. There are, however, situations where an administrator or developer may need to hold a browser version temporarily, such as:
+
+- testing a web application or managed environment against a fixed browser build;
+- investigating a regression or compatibility issue before approving a newer release;
+- maintaining a controlled test machine or kiosk with a documented update process.
+
+This script applies machine-wide changes, so it is generally unsuitable for an ordinary daily-use computer. Prefer supported enterprise update policies or managed browser configuration when available. Do not treat update blocking as a way to avoid browser changes indefinitely.
+
+## Manifest V2 (MV2) context
+
+Some users have considered holding Chrome at an older version to keep Manifest V2 browser extensions working. Manifest V2 is an older Chrome extension platform; Chrome has been transitioning extensions toward Manifest V3. Extension platform changes can affect extension availability and behavior, so teams may need time to test replacements or migration plans.
+
+Blocking browser updates is **not a reliable or safe long-term MV2 solution**. It also prevents security and stability fixes, and Chrome or extension behavior may change independently. Extension support can vary by Chrome release, policy, and distribution channel. Check current Chrome and extension documentation for the status that applies to your environment, and prefer migrating to a supported extension or using officially supported enterprise controls where applicable. This README does not promise that any particular Chrome version will continue to run MV2 extensions.
+
+## What the script changes
+
+When run with administrator privileges, `disablechrome.ps1` attempts to:
+
+1. Write Google Update policy values under both 64-bit and 32-bit registry policy paths, including the Chrome application GUID setting.
+2. Stop and disable the `gupdate` and `gupdatem` services if they are present.
+3. Disable Google update-related scheduled tasks that it finds.
+4. Add write-deny ACL entries to existing `Google\Update` directories under Program Files.
+5. Print a verification summary.
+
+The script does not guarantee that all update mechanisms are present, found, or successfully disabled. Output varies by Windows version and Chrome installation. Review the script before running it to understand the exact changes.
+
+## Requirements
+
+- Windows with PowerShell and the ScheduledTasks module available.
+- An administrator account. The script makes machine-level registry, service, task, and filesystem permission changes.
+- A specific reason to pause updates and a plan for restoring updates or manually installing security releases.
+
+## Tutorial: run the script
+
+1. Download `disablechrome.ps1` from this repository and save it in a known folder.
+2. Open **Windows PowerShell** using **Run as administrator**.
+3. In that PowerShell window, allow scripts for this process only:
 
    ```powershell
    Set-ExecutionPolicy -Scope Process Bypass
    ```
 
-   出现执行策略确认提示时，输入 `Y` 并按 Enter。`-Scope Process` 只对当前 PowerShell 窗口有效；关闭窗口后即失效，不会更改系统或用户的永久执行策略。请只对你信任并检查过的脚本这样做。
-4. 切换到脚本所在目录，然后运行脚本。例如文件在桌面：
+   If prompted, enter `Y` to confirm. `-Scope Process` applies only to the current PowerShell process; closing the window ends the setting. It does not permanently change the machine or user execution policy. Only use this for a script you trust and have reviewed.
+4. Change to the directory containing the script and run it. For example, if it is on your Desktop:
 
    ```powershell
    Set-Location "$HOME\Desktop"
    .\disablechrome.ps1
    ```
+5. Wait for `===== 完成 =====` and read the verification output. The script's status messages are in Chinese; the notes below explain the key messages.
 
-5. 等待脚本运行到 `===== 完成 =====`。运行期间不要关闭窗口。检查输出中的执行结果验证部分；具体结果会因 Windows 和 Chrome 安装情况不同而异。
+## Reading the output
 
-## 如何理解输出
+- `[策略] 已写入` means policy values were written. The verification section may show `UpdateDefault=0` and `ChromeGUID=0`.
+- `[服务] 未找到` means that service was not found on this machine; it does not necessarily mean the script failed.
+- `[任务] 未找到 Google 计划任务` means no matching tasks were found by the script's query.
+- `[权限] 目录不存在，跳过` means that update directory does not exist, so the script skipped it.
+- `[权限] 已拒绝写入` means the script added deny-write permissions to that update directory. This may interfere with Google updater maintenance.
 
-- `[策略] 已写入` 表示脚本写入了 64 位和 32 位 Google Update 注册表策略。验证时通常会看到 `UpdateDefault=0` 和 `ChromeGUID=0`。
-- `[服务]`、`[任务]` 会报告找到并停用的更新服务和计划任务。显示“未找到”只表示对应项目在这台电脑上不存在，或没有被查询到，不一定表示脚本失败。
-- `[权限] 目录不存在，跳过` 表示相应目录不存在，因此跳过 ACL 修改。
-- `[权限] 已拒绝写入` 表示脚本对该更新目录添加了拒绝写入规则。此设置可能影响 Google 更���程序及该目录下文件的维护。
+Treat the output as a best-effort report, not a guarantee that Chrome can no longer update. If something fails, do not respond by recursively taking ownership of the entire Google folder or denying access to `Everyone`.
 
-脚本中的服务、任务和目录权限修改是尽力执行的；请以末尾验证结果为准。若结果与预期不符，不要通过对整个 Google 目录递归更改所有权或权限来强行修复。
+## Re-enable updates and recovery
 
-## 安全与恢复注意事项
+The script does not include an automatic undo operation. Before running it, record existing policy values, service startup types, scheduled task states, and ACLs. Existing settings may have been configured by an administrator or another application.
 
-- 执行前建议记录当前服务启动类型、计划任务状态、相关注册表策略和目录 ACL；在企业或受管理设备上，请先咨询管理员。
-- 要恢复更新，请撤销脚本添加的策略、恢复原有服务启动类型和计划任务状态，并移除脚本添加的目录拒绝权限。若之前已有同名策略或 ACL，请恢复备份值，不要简单删除或覆盖它们。修改权限时应仅针对脚本处理的 `Google\Update` 目录和对应拒绝规则。
-- 你提供的示例中，`takeown`、向整个 `C:\Program Files (x86)\Google` 递归授予管理员完全控制，以及向 `Everyone` 添加递归完全拒绝权限，都不是运行本脚本所需的步骤。**请不要运行这些命令**：尤其是对 `Everyone` 的拒绝规则可能锁定应用程序及管理员对该目录的访问，导致 Chrome 或其他 Google 软件损坏。
-- 如需恢复过程中不确定该删除哪条规则，请停止操作，并使用执行前备份或向 Windows 管理员寻求帮助。
+To restore normal updating, remove or restore only the settings changed by this script: the Google Update policy values, service startup states, scheduled task states, and the script-added deny-write ACL entries on the specific `Google\Update` directories. Restore your recorded original values rather than assuming every service or task should be enabled. If you cannot identify the exact ACL entries or policy values to restore, stop and ask a Windows administrator for help.
 
-## 免责声明
+> Do not run broad recursive permission commands against `C:\Program Files (x86)\Google`. In particular, a recursive deny rule for `Everyone` can prevent applications and administrators from accessing files and may damage Chrome or other Google software.
 
-此脚本会更改 Windows 系统配置。使用者应先审阅脚本内容并自行承担测试、备份和恢复责任。本项目不保证适用于所有 Windows 或 Chrome 版本。
+## Disclaimer
+
+Use at your own risk. This script changes machine-wide Windows configuration and may reduce browser security or interfere with Google software. Test only on systems you are authorized to administer, maintain a recovery plan, and re-enable updates as soon as the temporary need has ended.
