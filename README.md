@@ -1,0 +1,1 @@
+# Disable-chrome-auto-update-script
