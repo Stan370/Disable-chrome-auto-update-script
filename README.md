@@ -1,80 +1,80 @@
+
 # Disable Chrome Auto-Update Script
 
-A Windows PowerShell script for disabling Google Chrome's automatic update mechanisms. It changes Google Update policy keys, disables matching update services and scheduled tasks when present, and adds write-deny permissions to existing Google Update directories.
+This repository contains a Windows PowerShell script that disables Chrome’s automatic update behavior by modifying Google Update policy entries, disabling related services and scheduled tasks, and applying deny-write permissions to the Google Update folders when they exist.
 
-> **This is a maintenance and compatibility workaround, not a security recommendation.** Chrome updates include security fixes. Keeping an outdated browser online can expose you to known vulnerabilities. Use this only for a specific, temporary reason, and plan how you will install updates manually or re-enable updating.
+This is a practical workaround for controlled or testing environments, not something to use casually on a normal personal computer.
 
-## Why disable Chrome updates?
+Why disable Chrome updates?
 
-Chrome updates are normally important: they deliver security patches, bug fixes, and compatibility improvements. There are, however, situations where an administrator or developer may need to hold a browser version temporarily, such as:
+Chrome updates are important because they patch vulnerabilities, improve stability, and keep browser features compatible with modern web standards. In some cases, however, users or administrators may need to temporarily freeze Chrome at a specific version, such as:
 
-- testing a web application or managed environment against a fixed browser build;
-- investigating a regression or compatibility issue before approving a newer release;
-- maintaining a controlled test machine or kiosk with a documented update process.
+- validating a web application against a fixed browser build
+- investigating a compatibility regression before installing a newer release
+- managing a kiosk, test machine, or locked-down environment with a controlled update policy
 
-This script applies machine-wide changes, so it is generally unsuitable for an ordinary daily-use computer. Prefer supported enterprise update policies or managed browser configuration when available. Do not treat update blocking as a way to avoid browser changes indefinitely.
+The downside is that disabling updates also disables the security and reliability fixes that Chrome regularly delivers. Use this only when there is a clear operational reason and a plan to re-enable updates later.
 
-## Manifest V2 (MV2) context
+Manifest V2 (MV2) context
 
-Some users have considered holding Chrome at an older version to keep Manifest V2 browser extensions working. Manifest V2 is an older Chrome extension platform; Chrome has been transitioning extensions toward Manifest V3. Extension platform changes can affect extension availability and behavior, so teams may need time to test replacements or migration plans.
+Some users also disable updates to keep Chrome on an older version because of Manifest V2 extension compatibility. Manifest V2 is the older Chrome extension model, while Manifest V3 is the newer system that Chrome has been transitioning toward.
 
-Blocking browser updates is **not a reliable or safe long-term MV2 solution**. It also prevents security and stability fixes, and Chrome or extension behavior may change independently. Extension support can vary by Chrome release, policy, and distribution channel. Check current Chrome and extension documentation for the status that applies to your environment, and prefer migrating to a supported extension or using officially supported enterprise controls where applicable. This README does not promise that any particular Chrome version will continue to run MV2 extensions.
+This is one reason people may want to delay Chrome updates. However, blocking updates is not a safe or durable MV2 strategy. It leaves the browser exposed to known vulnerabilities, may break future compatibility, and does not guarantee that MV2 extensions will continue to work indefinitely. If you need MV2 support, it is better to review the current Chrome and extension documentation, test migration paths, and use supported enterprise or managed browser controls when available.
 
-## What the script changes
+What the script does
 
-When run with administrator privileges, `disablechrome.ps1` attempts to:
+When run as Administrator, the script attempts to:
 
-1. Write Google Update policy values under both 64-bit and 32-bit registry policy paths, including the Chrome application GUID setting.
-2. Stop and disable the `gupdate` and `gupdatem` services if they are present.
-3. Disable Google update-related scheduled tasks that it finds.
-4. Add write-deny ACL entries to existing `Google\Update` directories under Program Files.
-5. Print a verification summary.
+1. Write Google Update policy values under both 32-bit and 64-bit registry locations.
+2. Stop and disable the Google update services if present.
+3. Disable Google-related scheduled tasks.
+4. Add deny-write permissions to Google Update folders under Program Files.
+5. Print a verification summary at the end.
 
-The script does not guarantee that all update mechanisms are present, found, or successfully disabled. Output varies by Windows version and Chrome installation. Review the script before running it to understand the exact changes.
+This is a best-effort script. It may not find every Chrome installation, every service, or every scheduled task on every Windows system.
 
-## Requirements
+Requirements
 
-- Windows with PowerShell and the ScheduledTasks module available.
-- An administrator account. The script makes machine-level registry, service, task, and filesystem permission changes.
-- A specific reason to pause updates and a plan for restoring updates or manually installing security releases.
+- Windows
+- PowerShell
+- Administrator rights
+- A clear reason to temporarily freeze Chrome updates
 
-## Tutorial: run the script
+How to run
 
-1. Download `disablechrome.ps1` from this repository and save it in a known folder.
-2. Open **Windows PowerShell** using **Run as administrator**.
-3. In that PowerShell window, allow scripts for this process only:
+Open PowerShell as Administrator and allow scripts for the current session only:
 
-   ```powershell
-   Set-ExecutionPolicy -Scope Process Bypass
-   ```
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+```
 
-   If prompted, enter `Y` to confirm. `-Scope Process` applies only to the current PowerShell process; closing the window ends the setting. It does not permanently change the machine or user execution policy. Only use this for a script you trust and have reviewed.
-4. Change to the directory containing the script and run it. For example, if it is on your Desktop:
+Then run:
 
-   ```powershell
-   Set-Location "$HOME\Desktop"
-   .\disablechrome.ps1
-   ```
-5. Wait for `===== 完成 =====` and read the verification output. The script's status messages are in Chinese; the notes below explain the key messages.
+```powershell
+Set-Location "$HOME\Desktop"
+.\disablechrome.ps1
+```
 
-## Reading the output
+If prompted, confirm with Y.
 
-- `[策略] 已写入` means policy values were written. The verification section may show `UpdateDefault=0` and `ChromeGUID=0`.
-- `[服务] 未找到` means that service was not found on this machine; it does not necessarily mean the script failed.
-- `[任务] 未找到 Google 计划任务` means no matching tasks were found by the script's query.
-- `[权限] 目录不存在，跳过` means that update directory does not exist, so the script skipped it.
-- `[权限] 已拒绝写入` means the script added deny-write permissions to that update directory. This may interfere with Google updater maintenance.
+What the output means
 
-Treat the output as a best-effort report, not a guarantee that Chrome can no longer update. If something fails, do not respond by recursively taking ownership of the entire Google folder or denying access to `Everyone`.
+- “已写入” / “written” means the Google Update registry policy was created or updated.
+- “未找到” / “not found” means the service or task was not detected on this machine.
+- “目录不存在，跳过” / “directory does not exist, skipping” means the update folder was not present.
+- “已拒绝写入” / “write denied” means the script added a deny rule to that Google Update directory.
 
-## Re-enable updates and recovery
+Important warning
 
-The script does not include an automatic undo operation. Before running it, record existing policy values, service startup types, scheduled task states, and ACLs. Existing settings may have been configured by an administrator or another application.
+This script changes machine-wide Windows settings and affects browser update behavior. It may leave the system in a less secure state. Always back up or document the current registry, service, task, and ACL state before making such changes.
 
-To restore normal updating, remove or restore only the settings changed by this script: the Google Update policy values, service startup states, scheduled task states, and the script-added deny-write ACL entries on the specific `Google\Update` directories. Restore your recorded original values rather than assuming every service or task should be enabled. If you cannot identify the exact ACL entries or policy values to restore, stop and ask a Windows administrator for help.
+Recovery and re-enabling updates
 
-> Do not run broad recursive permission commands against `C:\Program Files (x86)\Google`. In particular, a recursive deny rule for `Everyone` can prevent applications and administrators from accessing files and may damage Chrome or other Google software.
+There is no automatic undo in this script. To restore normal Chrome updating, you should revert the policy values, service startup settings, scheduled tasks, and ACL entries you changed. Do not operate broadly on the whole Google installation folder.
 
-## Disclaimer
+Do not run commands that recursively take ownership of the entire Google directory or deny access to Everyone. Such actions can interfere with Chrome or other Google software and may be difficult to reverse safely.
 
-Use at your own risk. This script changes machine-wide Windows configuration and may reduce browser security or interfere with Google software. Test only on systems you are authorized to administer, maintain a recovery plan, and re-enable updates as soon as the temporary need has ended.
+Disclaimer
+
+Use this script only on systems you are authorized to manage. This repository provides a workaround, not a recommended permanent configuration. If you need long-term support or a stable enterprise browser deployment, prefer official Chrome management, enterprise policy controls, and a proper update process.
+
